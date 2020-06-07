@@ -26,10 +26,20 @@ def process_frame(frame, net, W, H):
 	return detection
 
 
-def check_detection(frame_num, prev_frame_num, frame, detection, W, H, bounces, direction, prev_cY):
-	'''For the most likely detected soccer ball, creates the bounding box and finds centroid.
-	Then, checks to determine if a juggle happened since the last detected soccer ball'''
 
+
+def check_juggle(cYs):
+	'''Checks to see if a juggle has been made by looking at position and direction history'''
+
+	if (cYs[-1] <= cYs[-2]) and (cYs[-2] >= cYs[-3]):
+		return True
+	else:
+		return False
+
+
+
+def get_centroid(frame, detection, W, H):
+	''''''
 	box = detection[0, 0, 0, 3:7] * np.array([W, H, W, H])
 	
 
@@ -40,27 +50,7 @@ def check_detection(frame_num, prev_frame_num, frame, detection, W, H, bounces, 
 	cX = int((startX + endX) / 2.0)
 	cY = int((startY + endY) / 2.0)
 
-	(bounces, direction, prev_cY, prev_frame_num) = check_juggle(frame_num, prev_frame_num, bounces, direction, cY, prev_cY)
-		
-	return (cX, cY, bounces, direction, prev_cY, prev_frame_num, diameter)
-
-
-def check_juggle(frame_num, prev_frame_num, bounces, direction, cY, prev_cY):
-	'''Checks to see if ball changes direction from going down to up
-	to count as a juggle'''
-
-	if (direction == -1) and (cY > prev_cY):		
-		direction = 1
-	if (direction == 1) and (cY < prev_cY) and (frame_num - prev_frame_num > 5):
-		direction = -1
-		bounces += 1
-		prev_frame_num = frame_num
-
-		#Pose detection goes here...
-
-	prev_cY = cY
-
-	return (bounces, direction, prev_cY, prev_frame_num)
+	return cX, cY, diameter
 
 
 def run_video(path, net):
@@ -76,6 +66,7 @@ def run_video(path, net):
 	frame_num = 0
 	prev_frame_num = -7
 	first_detection = True
+	cYs = [0,0] #list of cY for each frame
 	
 	print("Processing video...")
 	vs = FileVideoStream(path).start()
@@ -93,13 +84,20 @@ def run_video(path, net):
 		
 		detection = process_frame(frame, net, W, H)
 		if detection[0, 0, 0, 2] > confidence:
-			(cX, cY, bounces, direction, prev_cY, prev_frame_num, diameter_temp) = check_detection(frame_num, prev_frame_num, frame, detection, W, H, bounces, direction, prev_cY)
+			cX, cY, diameter_temp = get_centroid(frame, detection, W, H)
 			if first_detection:
 				diameter = diameter_temp
 				first_detection = False
-			cv2.putText(frame, str(bounces), (int(W * 0.86), int(W * 0.2)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.007), (0, 255, 0), 2)
-			if  0.9 * diameter < diameter_temp < 1.1 * diameter:
+			if  0.75 * diameter < diameter_temp < 1.25 * diameter:
 				cv2.circle(frame, (cX, cY), int(W * 0.03), (0, 255, 0), -1)
+				cYs.append(cY)
+				if check_juggle(cYs):
+					bounces += 1
+					#pose detect
+
+
+			cv2.putText(frame, str(bounces), (int(W * 0.86), int(W * 0.2)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.007), (0, 255, 0), 2)
+
 		
 		cv2.imshow("Frame", frame)
 		key = cv2.waitKey(1) & 0xFF
@@ -120,7 +118,6 @@ def run_video(path, net):
 
 # cv2.setUseOptimized(True)
 # path = 'ball_test3.mp4'
-# #path = "juggle_clip2.mp4"
 # net = loading_model('frozen_inference_graph_sc_ball3.pb', 'graph_sc2.pbtxt')
 # start_time = time.time()
 # bounces = run_video(path, net)
