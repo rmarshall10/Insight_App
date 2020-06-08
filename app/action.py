@@ -41,9 +41,11 @@ def uploaded_file():
 		model_text = "graph_text.pbtxt"
 		net = video_tracker.loading_model(model_path + model_name, model_path + model_text)
 		
-		bounces = video_tracker.run_video(f.filename, net)
+		with tf.Session() as sess:
+			model_cfg, model_outputs = posenet.load_model(101, sess)
+			output_stride = model_cfg['output_stride']
 
-		
+			bounces = video_tracker.run_video(f.filename, net, sess, output_stride)
 
 		return str(bounces)
 
