@@ -54,8 +54,8 @@ def get_centroid(frame, detection, W, H):
 	return cX, cY, diameter
 
 
-def get_pose(frame, sess, output_stride, scale_factor = 1):
-	''''''
+def get_pose(frame, sess, output_stride, model_outputs, scale_factor = 1):
+	'''Passes frame through Posenet to determine to coordinates of key points of body'''
 	
 	input_image, display_image, output_scale = posenet.utils._process_input(frame, scale_factor, output_stride)
 
@@ -82,12 +82,36 @@ def get_pose(frame, sess, output_stride, scale_factor = 1):
 	return (draw_image, keypoint_scores[0], keypoint_coords[0])
 
 
+def get_closest_body_part(k_scores, k_coords, cX, cY):
+	'''Determine which body part is closest to bell centroid (but not above)'''
+		# PART_NAMES = ["nose", "leftEye", "rightEye", "leftEar", "rightEar", "leftShoulder",
+ #    "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist",
+ #    "leftHip", "rightHip", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"]
 
-def run_video(path, net):
+
+	distances = []
+	for part in [0, 13, 14, 15, 16]:
+		if cY > k_coords[part,0]:
+			distance = 100000
+		else:
+			distance = (cX - k_coords[part,1])**2 + (cY - k_coords[part,0])**2
+		distances.append(distance)
+
+	#need to add some max distance apart, so it detects if it's ground or somthing that's not the person.
+	print(distances)
+	body_part = distances.index(min(distances))
+	# 0 = head, 1 = left thigh, 2 = right thigh, 3 = left foot, 4 = right foot
+	return body_part
+
+
+def run_video(path, net, sess, output_stride, model_outputs):
 	'''Runs the uploaded video through the juggle counter algorithm
 	'''
 	cv2.setUseOptimized(True)
 
+	body_part_key = {0:"Head", 1:"Left Thigh", 2:"Right Thigh", 3:"Left Foot", 4:"Right Foot"}
+	body_part_bounces = {"Head":0, "Left Thigh":0, "Right Thigh":0, "Left Foot":0, "Right Foot":0}
+	body_part_sequence = []
 	confidence = 0.25
 	(W, H) = (300, 300)
 	#direction = 1
@@ -125,9 +149,15 @@ def run_video(path, net):
 				if check_bounce(cYs):
 					bounces += 1
 					#pose detect: input frame, output node coordinates
-					(frame, k_scores, k_coords) = get_pose(frame, sess, output_stride)
+					(frame, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
 					#print(k_scores)
 					#print(k_coords)
+					body_part = get_closest_body_part(k_scores, k_coords, cX, cY)
+					#print(body_part)
+					body_part_sequence.append(body_part)
+					body_part_bounces[body_part_key[body_part]] += 1
+
+					#add body_part to counts matrix
 
 
 		cv2.putText(frame, str(bounces), (int(W * 0.86), int(W * 0.2)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.007), (0, 255, 0), 2)
@@ -143,7 +173,7 @@ def run_video(path, net):
 	cv2.destroyAllWindows()
 	vs.stop()
 
-	return bounces
+	return (bounces, body_part_bounces, body_part_sequence)
 
 
 ##############################################

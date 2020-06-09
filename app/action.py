@@ -5,6 +5,9 @@ from app import video_tracker
 from flask import send_from_directory
 import os
 from werkzeug import secure_filename
+import posenet
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 @app.route('/')
 @app.route('/index')
@@ -45,9 +48,9 @@ def uploaded_file():
 			model_cfg, model_outputs = posenet.load_model(101, sess)
 			output_stride = model_cfg['output_stride']
 
-			bounces = video_tracker.run_video(f.filename, net, sess, output_stride)
+			(bounces, body_part_bounces, body_part_sequence) = video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs)
 
-		return str(bounces)
+		return str(bounces) + '\n' + str(body_part_sequence)
 
 		#return render_template('video_output.html')
 
