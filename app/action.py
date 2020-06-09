@@ -1,5 +1,5 @@
 from flask import render_template
-from flask import request
+from flask import request, Response, make_response
 from app import app
 from app import video_tracker
 from flask import send_from_directory
@@ -48,9 +48,14 @@ def uploaded_file():
 			model_cfg, model_outputs = posenet.load_model(101, sess)
 			output_stride = model_cfg['output_stride']
 
-			(bounces, body_part_bounces, body_part_sequence) = video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs)
-
-		return str(bounces) + '\n' + str(body_part_sequence)
-
+			(video_bytes, bounces, body_part_bounces, body_part_sequence) = video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs)
+			#frame = video_bytes[-1]
+			print(len(video_bytes))
+			return Response(video_tracker.display_video(video_bytes), mimetype='multipart/x-mixed-replace; boundary=frame')
+			#eturn str(bounces) + '\n' + str(body_part_sequence)
+			#return Response(gen(Camera()),
+            #        mimetype='multipart/x-mixed-replace; boundary=frame')
+			# return Response(video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs),
+			# 	mimetype='multipart/x-mixed-replace; boundary=frame')
 		#return render_template('video_output.html')
 

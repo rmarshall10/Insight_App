@@ -8,6 +8,25 @@ import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
 
+class Video(object):
+
+	model_path = "app/static/"
+	model_name = "frozen_inference_graph.pb"
+	model_text = "graph_text.pbtxt"
+	net = video_tracker.loading_model(model_path + model_name, model_path + model_text)
+
+	def __init__(self, filename):
+		net = video_tracker.loading_model(model_path + model_name, model_path + model_text)
+
+
+
+
+
+
+
+
+
+
 def loading_model(graph, text):
 	'''load the Tensorflow model graph and text files'''
 	
@@ -121,7 +140,6 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	#prev_frame_num = -7
 	first_detection = True
 	cYs = [0,0] #list of cY for each frame
-	video_bytes = []
 	
 	print("Processing video...")
 	vs = FileVideoStream(path).start()
@@ -150,7 +168,7 @@ def run_video(path, net, sess, output_stride, model_outputs):
 				if check_bounce(cYs):
 					bounces += 1
 					#pose detect: input frame, output node coordinates
-					(frame2, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
+					(frame, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
 					#print(k_scores)
 					#print(k_coords)
 					body_part = get_closest_body_part(k_scores, k_coords, cX, cY)
@@ -163,10 +181,11 @@ def run_video(path, net, sess, output_stride, model_outputs):
 
 		cv2.putText(frame, str(bounces), (int(W * 0.86), int(W * 0.2)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.007), (0, 255, 0), 2)
 
-		ret, img = cv2.imencode(".jpg", frame)
-		video_bytes.append(img.tobytes())
-		#yield (,bounces, body_part_bounces, body_part_sequence)
-		
+		# ret, frame_bytes = cv2.imencode(".jpg", frame)
+		# frame_bytes = frame_bytes.tobytes()
+		# yield (b'--frame\r\n'
+  #               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n\r\n')
+
 		#cv2.imshow("Frame", frame)
 		#key = cv2.waitKey(1) & 0xFF
 
@@ -177,14 +196,9 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	cv2.destroyAllWindows()
 	vs.stop()
 
-	return (video_bytes, bounces, body_part_bounces, body_part_sequence)
+	return (bounces, body_part_bounces, body_part_sequence)
 
-def display_video(video_bytes):
-	''''''
-	for frame in video_bytes:
-		time.sleep(.07)
-		yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
 ##############################################
 
 
