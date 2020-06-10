@@ -97,6 +97,7 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
 			distance = 100000
 		else:
 			distance = (cX - k_coords[part, 1])**2 + (cY - k_coords[part,0])**2
+		#distance = (cX - k_coords[part, 1])**2 + (cY - k_coords[part,0])**2
 		distances.append(distance)
 	if abs(hip_center - cX) > 2.5 * hip_distance:
 		distances[1] = 100000
@@ -169,7 +170,7 @@ def run_video(path, net, sess, output_stride, model_outputs):
 				(frame2, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
 				#print(k_scores)
 				#print(k_coords)
-				body_part = get_closest_body_part(k_scores, k_coords, cX, cY)
+				body_part = get_closest_body_part(k_scores, k_coords, cXs[-2], cYs[-2])
 				if body_part == 5:
 					ground = True
 				else:
