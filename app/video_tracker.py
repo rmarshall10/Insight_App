@@ -88,18 +88,24 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
  #    "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist",
  #    "leftHip", "rightHip", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"]
 
-
+	hip_distance = abs(k_coords[12, 1] - k_coords[11, 1])
+	hip_center = min(k_coords[12, 1], k_coords[11, 1]) + hip_distance / 2.0
+	parts = [0, 11, 12, 15, 16]
 	distances = []
-	for part in [0, 11, 12, 15, 16]:
+	for part in parts:
 		if cY > k_coords[part,0]:
 			distance = 100000
 		else:
-			distance = (cX - k_coords[part,1])**2 + (cY - k_coords[part,0])**2
+			distance = (cX - k_coords[part, 1])**2 + (cY - k_coords[part,0])**2
 		distances.append(distance)
-
+	if abs(hip_center - cX) > 2.5 * hip_distance:
+		distances[1] = 100000
+		distances[2] = 100000
 	#need to add some max distance apart, so it detects if it's ground or somthing that's not the person.
 	#print(distances)
 	body_part = distances.index(min(distances))
+	if abs(cX - k_coords[parts[body_part], 1]) > hip_distance * 3.1:
+		return 5
 	# 0 = head, 1 = left thigh, 2 = right thigh, 3 = left foot, 4 = right foot
 	return body_part
 
@@ -108,9 +114,9 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	'''Runs the uploaded video through the juggle counter algorithm
 	'''
 	cv2.setUseOptimized(True)
-
 	body_part_key = {0:"Head", 1:"Left Thigh", 2:"Right Thigh", 3:"Left Foot", 4:"Right Foot"}
 	body_part_bounces = {"Head":0, "Left Thigh":0, "Right Thigh":0, "Left Foot":0, "Right Foot":0}
+	body_part_key_simple = {0:"Head", 1:"Thigh", 2:"Thigh", 3:"Foot", 4:"Foot", 5:"Ground"}
 	body_part_sequence = []
 	confidence = 0.0
 	(W, H) = (300, 300)
@@ -122,13 +128,14 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	first_detection = True
 	cYs = [0,0] #list of cY for each frame
 	cXs = [0,0]
-	skipped_frames = 100	
+	skipped_frames = 100
+	ground = False	
 
 	print("Processing video...")
 	vs = FileVideoStream(path).start()
 
-	while vs.more():
-		frames_per_read = 3
+	while vs.more() and not ground:
+		frames_per_read = 2
 		for i in range(frames_per_read):
 			if vs.more():
 				frame = vs.read()
@@ -163,11 +170,15 @@ def run_video(path, net, sess, output_stride, model_outputs):
 				#print(k_scores)
 				#print(k_coords)
 				body_part = get_closest_body_part(k_scores, k_coords, cX, cY)
-				print(body_part_key[body_part])
-				#print(body_part)
+				if body_part == 5:
+					ground = True
+				else:
+					print(body_part_key[body_part])
+					#print(body_part)
+					
+					body_part_bounces[body_part_key[body_part]] += 1
+					bounces += 1
 				body_part_sequence.append(body_part)
-				body_part_bounces[body_part_key[body_part]] += 1
-				bounces += 1
 		else:
 			skipped_frames += 100
 			print('SKIPPED!!!')
@@ -196,7 +207,7 @@ def run_video(path, net, sess, output_stride, model_outputs):
 					#add body_part to counts matrix
 
 		frame = cv2.resize(frame, (600, 600))
-		cv2.putText(frame, str(bounces), (int(2 * W * 0.7), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.01), (0, 255, 0), 2)
+		cv2.putText(frame, str(bounces), (int(2 * W * 0.76), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.01), (0, 255, 0), 2)
 		# cv2.putText(frame, "H:  " + str(body_part_bounces["Head"]), (int(W * 0.66), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
 		# cv2.putText(frame, "LT: " + str(body_part_bounces["Left Thigh"]), (int(W * 0.66), int(W * 0.4)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
 		# cv2.putText(frame, "RT: " + str(body_part_bounces["Right Thigh"]), (int(W * 0.66), int(W * 0.5)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
@@ -204,14 +215,26 @@ def run_video(path, net, sess, output_stride, model_outputs):
 		# cv2.putText(frame, "RF: " + str(body_part_bounces["Right Foot"]), (int(W * 0.66), int(W * 0.7)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
 		
 		cv2.putText(frame, "Head: " + str(body_part_bounces["Head"]), (int(2 * W * 0.76), int(W * 0.5)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
-		cv2.putText(frame, "Thigh: " + str(body_part_bounces["Left Thigh"]+body_part_bounces["Right Thigh"]), (int(2 * W * 0.76), int(W * 0.7)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
-		cv2.putText(frame, "Foot: " + str(body_part_bounces["Left Foot"]+body_part_bounces["Right Foot"]), (int(2 * W * 0.76), int(W * 0.9)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
+		cv2.putText(frame, "Thigh: " + str(body_part_bounces["Left Thigh"]+body_part_bounces["Right Thigh"]), (int(2 * W * 0.76), int(W * 0.65)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
+		cv2.putText(frame, "Foot:  " + str(body_part_bounces["Left Foot"]+body_part_bounces["Right Foot"]), (int(2 * W * 0.76), int(W * 0.8)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
 
-
-		
+		try:
+			cv2.putText(frame, body_part_key_simple[body_part_sequence[-1]], (int(2 * W * 0.05), int(W * 0.2)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.007), (0, 255, 0), 2)
+		except:
+			print("None 1")
+		# try:
+		# 	cv2.putText(frame, body_part_key[body_part_sequence[-2]], (int(2 * W * 0.1), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
+		# except:
+		# 	print("None 2")
+		# try:
+		# 	cv2.putText(frame, body_part_key[body_part_sequence[-3]], (int(2 * W * 0.1), int(W * 0.4)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.002), (0, 255, 0), 2)
+		# except:
+		# 	print("None 3")
+			
+		#time.sleep(1)
 		ret, img = cv2.imencode(".jpg", frame)
-		#video_bytes.append(img.tobytes())
 		img = img.tobytes()
+		#video_bytes.append(img)
 		yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + img + b'\r\n')
 		#yield (,bounces, body_part_bounces, body_part_sequence)
