@@ -90,6 +90,7 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
 
 	hip_distance = abs(k_coords[12, 1] - k_coords[11, 1])
 	hip_center = min(k_coords[12, 1], k_coords[11, 1]) + hip_distance / 2.0
+	knee_distance = ((k_coords[11, 1] - k_coords[13, 1])**2 + (k_coords[11, 0] - k_coords[13, 0])**2)**0.5
 	parts = [0, 11, 12, 15, 16]
 	distances = []
 	for part in parts:
@@ -99,13 +100,15 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
 			distance = (cX - k_coords[part, 1])**2 + (cY - k_coords[part,0])**2
 		#distance = (cX - k_coords[part, 1])**2 + (cY - k_coords[part,0])**2
 		distances.append(distance)
-	if abs(hip_center - cX) > 2.5 * hip_distance:
-		distances[1] = 100000
-		distances[2] = 100000
+	# if abs(hip_center - cX) > 2.5 * hip_distance:
+	# 	distances[1] = 100000
+	# 	distances[2] = 100000
 	#need to add some max distance apart, so it detects if it's ground or somthing that's not the person.
 	#print(distances)
 	body_part = distances.index(min(distances))
-	if abs(cX - k_coords[parts[body_part], 1]) > hip_distance * 3.1:
+	#print(distances)
+	#print(body_part)
+	if abs(cX - k_coords[parts[body_part], 1]) > knee_distance * 3:
 		return 5
 	# 0 = head, 1 = left thigh, 2 = right thigh, 3 = left foot, 4 = right foot
 	return body_part
@@ -125,7 +128,7 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	bounces = 0
 	#prev_cY = 0
 	frame_num = 0
-	last_juggle_frame = -4
+	last_juggle_frame = -2
 	first_detection = True
 	cYs = [0,0] #list of cY for each frame
 	cXs = [0,0]
@@ -232,7 +235,7 @@ def run_video(path, net, sess, output_stride, model_outputs):
 		# except:
 		# 	print("None 3")
 			
-		#time.sleep(1)
+		#time.sleep(0.5)
 		ret, img = cv2.imencode(".jpg", frame)
 		img = img.tobytes()
 		#video_bytes.append(img)

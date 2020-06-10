@@ -35,7 +35,7 @@ def uploaded_file():
 	if request.method == 'POST':
 		f = request.files['file']
 		# if not allowed_extension(f.filename):
-		# 	return redirect(?????)
+		# 	return
 
 		f.save(secure_filename(f.filename))
 		#return 'file uploaded successfully'
