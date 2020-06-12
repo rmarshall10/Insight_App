@@ -16,12 +16,23 @@ def loading_model(graph, text):
 	return net
 
 
+def read_frame(video, frame_num):
+	''''''
+
+	frames_per_read = 2
+	for i in range(frames_per_read):
+		if video.more():
+			frame = video.read()
+			frame_num += 1
+	return (frame, frame_num)
+
+
 def process_frame(frame, net, W, H):
 	'''Runs the current frame through the detection model'''
 
 	
-	blob = cv2.dnn.blobFromImage(frame, size = (W, H), swapRB=True)#,
-	#blobFromImage can perform mean subtraction, scaling, and optionally channel swapping
+	blob = cv2.dnn.blobFromImage(frame, size = (W, H), swapRB=True)
+	#blobFromImage can perform mean subtraction, scaling, and channel swapping
 	net.setInput(blob)
 	detection = net.forward()
 
@@ -38,12 +49,10 @@ def check_bounce(cYs):
 		return False
 
 
-
 def get_centroid(frame, detection, W, H):
 	'''Determine the centroid of the detected ball by looking at bounding box'''
 	box = detection[0, 0, 0, 3:7] * np.array([W, H, W, H])
 	
-
 	(startX, startY, endX, endY) = box.astype("int")
 	diameter = ((endX - startX) + (endY - startY)) / 2.0
 	#cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
@@ -55,7 +64,7 @@ def get_centroid(frame, detection, W, H):
 
 
 def get_pose(frame, sess, output_stride, model_outputs, scale_factor = 1):
-	'''Passes frame through Posenet to determine to coordinates of key points of body'''
+	'''Passes frame through Posenet to determine the coordinates of key points of body'''
 	
 	input_image, display_image, output_scale = posenet.utils._process_input(frame, scale_factor, output_stride)
 
@@ -93,25 +102,24 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
 	knee_distance = ((k_coords[11, 1] - k_coords[13, 1])**2 + (k_coords[11, 0] - k_coords[13, 0])**2)**0.5
 	parts = [0, 11, 12, 15, 16]
 	distances = []
+
 	for part in parts:
 		if cY > k_coords[part,0]:
 			distance = 100000
 		else:
 			distance = (cX - k_coords[part, 1])**2 + (cY - k_coords[part,0])**2
-		#distance = (cX - k_coords[part, 1])**2 + (cY - k_coords[part,0])**2
+	
 		distances.append(distance)
-	# if abs(hip_center - cX) > 2.5 * hip_distance:
-	# 	distances[1] = 100000
-	# 	distances[2] = 100000
-	#need to add some max distance apart, so it detects if it's ground or somthing that's not the person.
-	#print(distances)
+
 	body_part = distances.index(min(distances))
-	#print(distances)
-	#print(body_part)
-	if abs(cX - k_coords[parts[body_part], 1]) > knee_distance * 3:
+
+	if abs(cX - k_coords[parts[body_part], 1]) > knee_distance * 2 or sum(distances) == 5 * 100000:
 		return 5
-	# 0 = head, 1 = left thigh, 2 = right thigh, 3 = left foot, 4 = right foot
+	# 0 = head, 1 = left thigh, 2 = right thigh, 3 = left foot, 4 = right foot, 5 = ground
 	return body_part
+
+
+
 
 
 def run_video(path, net, sess, output_stride, model_outputs):
@@ -124,11 +132,9 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	body_part_sequence = []
 	confidence = 0.0
 	(W, H) = (300, 300)
-	#direction = 1
 	bounces = 0
-	#prev_cY = 0
 	frame_num = 0
-	last_juggle_frame = -2
+	last_juggle_frame = -4
 	first_detection = True
 	cYs = [0,0] #list of cY for each frame
 	cXs = [0,0]
@@ -139,11 +145,9 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	vs = FileVideoStream(path).start()
 
 	while vs.more() and not ground:
-		frames_per_read = 2
-		for i in range(frames_per_read):
-			if vs.more():
-				frame = vs.read()
-				frame_num += 1
+
+		(frame, frame_num) = read_frame(vs, frame_num)
+
 		try:
 			frame = cv2.resize(frame, (W, H))
 		except cv2.error as e:
@@ -151,17 +155,21 @@ def run_video(path, net, sess, output_stride, model_outputs):
 			break
 		
 		detection = process_frame(frame, net, W, H)
-		################
+
+		cX, cY, diameter_temp = get_centroid(frame, detection, W, H)
+		
+		# Determine the ball size from the detection on the first frame (most likely to be clear/stationary ball)
+		if first_detection:
+			diameter = diameter_temp
+			first_detection = False
+
+		# If the detection is not the same size as the known ball, skip it. Also only allow detections within a realistic distance from the previous detection (two diameters of the ball * # of consecutive skipped frames) 	
 		skip_frame = True
-		for bbox in detection[0, 0, :]:
-			cX, cY, diameter_temp = get_centroid(frame, detection, W, H)
-			if first_detection:
-				diameter = diameter_temp
-				first_detection = False
-			if (0.7 * diameter < diameter_temp < 2 * diameter) and (((cXs[-1] - cX)**2 + (cYs[-1] - cY)**2) < skipped_frames * 4 * (diameter**2)):
-				skip_frame = False
-				skipped_frames = 1
-				break
+		if (0.7 * diameter < diameter_temp < 2 * diameter) and (((cXs[-1] - cX)**2 + (cYs[-1] - cY)**2) < skipped_frames * 4 * (diameter**2)):
+			skip_frame = False
+			skipped_frames = 1
+			
+
 		if not skip_frame:
 			cv2.circle(frame, (cX, cY), int(W * 0.03), (0, 255, 0), -1)
 			cXs.append(cX)
@@ -169,10 +177,10 @@ def run_video(path, net, sess, output_stride, model_outputs):
 			if (frame_num - last_juggle_frame > 8) and check_bounce(cYs):
 				
 				last_juggle_frame = frame_num
+				
 				#pose detect
 				(frame2, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
-				#print(k_scores)
-				#print(k_coords)
+				
 				body_part = get_closest_body_part(k_scores, k_coords, cXs[-2], cYs[-2])
 				if body_part == 5:
 					ground = True
@@ -186,29 +194,6 @@ def run_video(path, net, sess, output_stride, model_outputs):
 		else:
 			skipped_frames += 100
 			print('SKIPPED!!!')
-
-
-		# if detection[0, 0, 0, 2] > confidence:
-		# 	cX, cY, diameter_temp = get_centroid(frame, detection, W, H)
-		# 	if first_detection:
-		# 		diameter = diameter_temp
-		# 		first_detection = False
-		# 	if  0.75 * diameter < diameter_temp < 1.25 * diameter:
-		# 		cv2.circle(frame, (cX, cY), int(W * 0.03), (0, 255, 0), -1)
-		# 		cYs.append(cY)
-		# 		if check_bounce(cYs):
-		# 			bounces += 1
-		# 			#pose detect: input frame, output node coordinates
-		# 			(frame2, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
-		# 			#(frame2, k_scores, k_coords) = get_pose(frame)
-		# 			#print(k_scores)
-		# 			#print(k_coords)
-		# 			body_part = get_closest_body_part(k_scores, k_coords, cX, cY)
-		# 			#print(body_part)
-		# 			body_part_sequence.append(body_part)
-		# 			body_part_bounces[body_part_key[body_part]] += 1
-
-					#add body_part to counts matrix
 
 		frame = cv2.resize(frame, (600, 600))
 		cv2.putText(frame, str(bounces), (int(2 * W * 0.76), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.01), (0, 255, 0), 2)
@@ -258,20 +243,8 @@ def run_video(path, net, sess, output_stride, model_outputs):
                b'Content-Type: image/jpeg\r\n\r\n' + img + b'\r\n')
 
 def display_video(video_bytes):
-	''''''
+	'''Takes a list of image bytes and yields them consecutively to play in browser like a video'''
 	for frame in video_bytes:
 		time.sleep(.07)
 		yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-##############################################
-
-
-
-# cv2.setUseOptimized(True)
-# path = 'ball_test3.mp4'
-# net = loading_model('frozen_inference_graph_sc_ball3.pb', 'graph_sc2.pbtxt')
-# start_time = time.time()
-# bounces = run_video(path, net)
-# print(f"You got {bounces} juggles! Try to beat it next time!")
-
-# print("--- %s seconds ---" % (time.time() - start_time))

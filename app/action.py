@@ -9,12 +9,12 @@ import posenet
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
-@app.route('/')
+#@app.route('/')
 @app.route('/index')
 def index():
 	return render_template("index.html", title = 'Home', user = { 'nickname': 'rockstar!' })
 
-
+@app.route('/')
 @app.route('/upload')
 def upload_file():
 	return render_template('upload.html')
@@ -38,29 +38,19 @@ def uploaded_file():
 		# 	return
 
 		f.save(secure_filename(f.filename))
-		#return 'file uploaded successfully'
+	
 		model_path = "app/static/"
 		model_name = "frozen_inference_graph.pb"
 		model_text = "graph_text.pbtxt"
 		net = video_tracker.loading_model(model_path + model_name, model_path + model_text)
 		
-		#with tf.Session() as sess:
+		
 		sess = tf.Session()
 		model_cfg, model_outputs = posenet.load_model(101, sess)
 		output_stride = model_cfg['output_stride']
 
 		#(video_bytes, bounces, body_part_bounces, body_part_sequence) = video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs)
-		#frame = video_bytes[-1]
-		#print(len(video_bytes))
+
 		#return Response(video_tracker.display_video(video_bytes), mimetype='multipart/x-mixed-replace; boundary=frame')
 		return Response(video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs), mimetype='multipart/x-mixed-replace; boundary=frame')
 			
-		#return Response(video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs), mimetype='multipart/x-mixed-replace; boundary=frame')
-			
-			#eturn str(bounces) + '\n' + str(body_part_sequence)
-			#return Response(gen(Camera()),
-            #        mimetype='multipart/x-mixed-replace; boundary=frame')
-			# return Response(video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs),
-			# 	mimetype='multipart/x-mixed-replace; boundary=frame')
-		#return render_template('video_output.html')
-
