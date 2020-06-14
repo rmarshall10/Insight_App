@@ -54,3 +54,50 @@ def uploaded_file():
 		#return Response(video_tracker.display_video(video_bytes), mimetype='multipart/x-mixed-replace; boundary=frame')
 		return Response(video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs), mimetype='multipart/x-mixed-replace; boundary=frame')
 			
+
+def example_file(link):
+
+	if link == 1:
+		video_name = "ball_test6.mp4"
+	elif link == 2:
+		video_name = "ball_test3.mp4"
+	else:
+		video_name = "ball_test6.mp4"
+
+	model_path = "app/static/"
+	model_name = "frozen_inference_graph.pb"
+	model_text = "graph_text.pbtxt"
+	filename = model_path + video_name
+
+	net = video_tracker.loading_model(model_path + model_name, model_path + model_text)
+	
+	sess = tf.Session()
+	model_cfg, model_outputs = posenet.load_model(101, sess)
+	output_stride = model_cfg['output_stride']
+
+	#(video_bytes, bounces, body_part_bounces, body_part_sequence) = video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs)
+
+	#return Response(video_tracker.display_video(video_bytes), mimetype='multipart/x-mixed-replace; boundary=frame')
+	return Response(video_tracker.run_video(filename, net, sess, output_stride, model_outputs), mimetype='multipart/x-mixed-replace; boundary=frame')
+	
+
+
+@app.route('/example_1')
+def example1():
+	return example_file(1)
+
+@app.route('/example_2')
+def example2():
+	return example_file(2)
+
+@app.route('/example_3')
+def example3():
+	return example_file(3)
+
+@app.route('/about')
+def about():	
+	return "Insight Fellows project"
+
+@app.route('/contact')
+def contact():
+	return "Email: ryanmarshall89@gmail.com"

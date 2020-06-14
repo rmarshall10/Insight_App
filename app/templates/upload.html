@@ -19,7 +19,7 @@
   <meta name="author" content="">
   <link rel="icon" href="../../favicon.ico">
 
-  <title>Starter Template for Bootstrap</title>
+  <title>Juggle Wizard</title>
 
   <!-- Bootstrap core CSS -->
   <link href="../static/css/bootstrap.min.css" rel="stylesheet">
@@ -52,13 +52,13 @@
           <span class="icon-bar"></span>
           <span class="icon-bar"></span>
         </button>
-        <a class="navbar-brand" href="#">Project name</a>
+        <a class="navbar-brand" href="/">Juggle Wizard</a>
       </div>
       <div class="collapse navbar-collapse">
         <ul class="nav navbar-nav">
-          <li class="active"><a href="#">Home</a></li>
-          <li><a href="#about">About</a></li>
-          <li><a href="#contact">Contact</a></li>
+          <!-- <li class="active"><a href="#">Home</a></li> -->
+          <li><a href="about">About</a></li>
+          <li><a href="contact">Contact</a></li>
         </ul>
       </div><!--/.nav-collapse -->
     </div>
@@ -67,8 +67,8 @@
   <div class="container">
 
    <div class="starter-template">
-       <h2>Juggle Wizard</h2>
-       <p>Upload a video to get your score!</p>
+       <h1>Juggle Wizard</h1>
+       <!-- <p>Upload a video to get your score!</p> -->
    </div>
 <!-- ------------------------------------------->
    <!-- <html>
@@ -83,6 +83,8 @@
 
    <div class = "container">
 
+
+     <h3>Choose a file to upload:</h3>
      <form action="/uploader" method="POST", enctype="multipart/form-data">
        <div class="form-group">
          <label for="file">Upload File:</label>
@@ -95,10 +97,27 @@
        </div>
 
      </form>
+     <br><br>
+     <h4>Or choose from examples: </h4>
+      <ul>
+        <li><a href = "example_1">Example 1</a></li>
+        <li><a href = "example_2">Example 2</a></li>
+        <li><a href = "example_3">Example 3</a></li>
+      </ul>
+
+
+
    </div>
 
    <script src="https://code.jquery.com/jquery-1.10.2.min.js"></script>
    <script src="static/js/bootstrap.min.js"></script>
+
+
+
+   <!--  -->
+
+
+<!--  -->
 
  </div> <!-- /.container-->
 
