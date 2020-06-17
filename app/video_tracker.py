@@ -9,7 +9,7 @@ tf.disable_v2_behavior()
 
 
 def loading_model(graph, text):
-	'''load the Tensorflow model graph and text files'''
+	'''load the soccer ball detection Tensorflow model graph and text files into OpenCV net'''
 	
 	net = cv2.dnn.readNetFromTensorflow(graph, text)
 
@@ -17,7 +17,7 @@ def loading_model(graph, text):
 
 
 def read_frame(video, frame_num):
-	''''''
+	'''Read the next frame of the video'''
 
 	frames_per_read = 2
 	for i in range(frames_per_read):
@@ -50,7 +50,7 @@ def check_bounce(cYs):
 
 
 def get_centroid(frame, detection, W, H):
-	'''Determine the centroid of the detected ball by looking at bounding box'''
+	'''Determine the centroid and diameter of the detected ball by looking at bounding box'''
 	box = detection[0, 0, 0, 3:7] * np.array([W, H, W, H])
 	
 	(startX, startY, endX, endY) = box.astype("int")
@@ -84,6 +84,7 @@ def get_pose(frame, sess, output_stride, model_outputs, scale_factor = 1):
 
 	keypoint_coords *= output_scale
 
+	#drawing nodes and lines on frame
 	draw_image = posenet.draw_skel_and_kp(
 		display_image, pose_scores, keypoint_scores, keypoint_coords,
 		min_pose_score=0.15, min_part_score=0.05)
@@ -93,19 +94,27 @@ def get_pose(frame, sess, output_stride, model_outputs, scale_factor = 1):
 
 def get_closest_body_part(k_scores, k_coords, cX, cY):
 	'''Determine which body part is closest to bell centroid (but not above)'''
-		# PART_NAMES = ["nose", "leftEye", "rightEye", "leftEar", "rightEar", "leftShoulder",
- #    "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist",
- #    "leftHip", "rightHip", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"]
 
-	hip_distance = abs(k_coords[12, 1] - k_coords[11, 1])
-	hip_center = min(k_coords[12, 1], k_coords[11, 1]) + hip_distance / 2.0
+	# PART_NAMES = ["nose", "leftEye", "rightEye", "leftEar", "rightEar", "leftShoulder",
+ 	#    "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist",
+ 	#    "leftHip", "rightHip", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"]
+
+	# hip_distance = abs(k_coords[12, 1] - k_coords[11, 1])
+	# hip_center = min(k_coords[12, 1], k_coords[11, 1]) + hip_distance / 2.0
+	
+	#distance fro
 	knee_distance = ((k_coords[11, 1] - k_coords[13, 1])**2 + (k_coords[11, 0] - k_coords[13, 0])**2)**0.5
+	
+	#choosing hips instead of knees works better for deteict thigh vs foot
 	parts = [0, 11, 12, 15, 16]
 	distances = []
 
+	#loop over five body parts that can make a touch
 	for part in parts:
+		#if the body part is above the ball, then penalize it so it cannot be chosen
 		if cY > k_coords[part,0]:
 			distance = 100000
+		#distance from body part to ball
 		else:
 			distance = (cX - k_coords[part, 1])**2 + (cY - k_coords[part,0])**2
 	
@@ -113,6 +122,7 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
 
 	body_part = distances.index(min(distances))
 
+	#if detection is too far away from body, or if all body parts are penalized, then the ball hit something else, like the ground
 	if abs(cX - k_coords[parts[body_part], 1]) > knee_distance * 2 or sum(distances) == 5 * 100000:
 		return 5
 	# 0 = head, 1 = left thigh, 2 = right thigh, 3 = left foot, 4 = right foot, 5 = ground
@@ -120,11 +130,11 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
 
 
 
-
-
 def run_video(path, net, sess, output_stride, model_outputs):
 	'''Runs the uploaded video through the juggle counter algorithm
 	'''
+	
+	#initialize constants and counters
 	cv2.setUseOptimized(True)
 	body_part_key = {0:"Head", 1:"Left Thigh", 2:"Right Thigh", 3:"Left Foot", 4:"Right Foot"}
 	body_part_bounces = {"Head":0, "Left Thigh":0, "Right Thigh":0, "Left Foot":0, "Right Foot":0}
@@ -137,7 +147,7 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	last_juggle_frame = -4
 	first_detection = True
 	cYs = [0,0] #list of cY for each frame
-	cXs = [0,0]
+	cXs = [0,0] #list of cX for each frame
 	skipped_frames = 100
 	ground = False	
 
@@ -165,15 +175,18 @@ def run_video(path, net, sess, output_stride, model_outputs):
 
 		# If the detection is not the same size as the known ball, skip it. Also only allow detections within a realistic distance from the previous detection (two diameters of the ball * # of consecutive skipped frames) 	
 		skip_frame = True
-		if (0.7 * diameter < diameter_temp < 2 * diameter) and (((cXs[-1] - cX)**2 + (cYs[-1] - cY)**2) < skipped_frames * 4 * (diameter**2)):
+		
+		if (0.7 * diameter < diameter_temp < 2 * diameter) and (((cXs[-1] - cX)**2 + (cYs[-1] - cY)**2)**0.5 < skipped_frames * 2 * diameter):
 			skip_frame = False
 			skipped_frames = 1
 			
-
+		#if we've determined that there is a valide detection, show the detection of ball and add centroid to lists
 		if not skip_frame:
 			cv2.circle(frame, (cX, cY), int(W * 0.03), (0, 255, 0), -1)
 			cXs.append(cX)
 			cYs.append(cY)
+
+			#check if there was a juggle, and make sure it has been long enough since last juggle (this is a dirty fix for some false detections)
 			if (frame_num - last_juggle_frame > 8) and check_bounce(cYs):
 				
 				last_juggle_frame = frame_num
@@ -182,19 +195,20 @@ def run_video(path, net, sess, output_stride, model_outputs):
 				(frame2, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
 				
 				body_part = get_closest_body_part(k_scores, k_coords, cXs[-2], cYs[-2])
+				
 				if body_part == 5:
 					ground = True
 				else:
-					print(body_part_key[body_part])
-					#print(body_part)
-					
 					body_part_bounces[body_part_key[body_part]] += 1
 					bounces += 1
 				body_part_sequence.append(body_part)
+		
+		#if there is no valid detection in the frame, increase skipped_frames counter
 		else:
-			skipped_frames += 100
-			print('SKIPPED!!!')
+			skipped_frames += 0.7
+			print('skipped_frames ', skipped_frames)
 
+		#print scores on the frame
 		frame = cv2.resize(frame, (600, 600))
 		cv2.putText(frame, str(bounces), (int(2 * W * 0.76), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.01), (0, 255, 0), 2)
 		# cv2.putText(frame, "H:  " + str(body_part_bounces["Head"]), (int(W * 0.66), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
@@ -203,14 +217,17 @@ def run_video(path, net, sess, output_stride, model_outputs):
 		# cv2.putText(frame, "LF: " + str(body_part_bounces["Left Foot"]), (int(W * 0.66), int(W * 0.6)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
 		# cv2.putText(frame, "RF: " + str(body_part_bounces["Right Foot"]), (int(W * 0.66), int(W * 0.7)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
 		
+		# Determining right vs left is not accurate enough, so don't differentiate between them
 		cv2.putText(frame, "Head: " + str(body_part_bounces["Head"]), (int(2 * W * 0.76), int(W * 0.5)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
 		cv2.putText(frame, "Thigh: " + str(body_part_bounces["Left Thigh"]+body_part_bounces["Right Thigh"]), (int(2 * W * 0.76), int(W * 0.65)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
 		cv2.putText(frame, "Foot:  " + str(body_part_bounces["Left Foot"]+body_part_bounces["Right Foot"]), (int(2 * W * 0.76), int(W * 0.8)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
 
+		#Print body part of previous juggle, if a juggle has been made
 		try:
 			cv2.putText(frame, body_part_key_simple[body_part_sequence[-1]], (int(2 * W * 0.05), int(W * 0.2)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.007), (0, 255, 0), 2)
 		except:
-			print("None 1")
+			pass
+
 		# try:
 		# 	cv2.putText(frame, body_part_key[body_part_sequence[-2]], (int(2 * W * 0.1), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
 		# except:
@@ -220,14 +237,16 @@ def run_video(path, net, sess, output_stride, model_outputs):
 		# except:
 		# 	print("None 3")
 			
-		#time.sleep(0.5)
+		# Show the frame
 		ret, img = cv2.imencode(".jpg", frame)
 		img = img.tobytes()
 		#video_bytes.append(img)
 		yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + img + b'\r\n')
-		#yield (,bounces, body_part_bounces, body_part_sequence)
+		#yield (bounces, body_part_bounces, body_part_sequence)
 		
+
+		#if run in terminal instead of app, can have OpenCV show image
 		#cv2.imshow("Frame", frame)
 		#key = cv2.waitKey(1) & 0xFF
 
@@ -242,9 +261,10 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	return (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + img + b'\r\n')
 
-def display_video(video_bytes):
-	'''Takes a list of image bytes and yields them consecutively to play in browser like a video'''
-	for frame in video_bytes:
-		time.sleep(.07)
-		yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+# Optional function to display the frames from a list like a video in real time
+# def display_video(video_bytes):
+# 	'''Takes a list of image bytes and yields them consecutively to play in browser like a video'''
+# 	for frame in video_bytes:
+# 		time.sleep(.07)
+# 		yield (b'--frame\r\n'
+#                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
