@@ -1,0 +1,10 @@
+tensorflow
+opencv-python
+opencv-contrib-python
+libsm6
+libxext6
+libxrender-dev
+imutils
+time
+scipy
+werkzeug==0.16.1

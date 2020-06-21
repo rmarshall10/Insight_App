@@ -10,4 +10,4 @@ In a future, scaled-up version of the app, users could share with friends and te
 
 A user uploads a video of juggling a soccer ball, and the output is the tracked video with the counters and a breakdown of counts with (rate metrics).
 The ball is detected by a single-shot detection neural network (SSD_mobilenet_v2), pretrained on COCO image dataset, and retrained on thousands of images of soccer balls in action from ImageNet.
-The detection model is from Tensorflow, and uses OpenCV for tracking.
+The pose detection model is from Tensorflow, and uses OpenCV for tracking.

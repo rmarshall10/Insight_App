@@ -20,6 +20,7 @@ def upload_file():
 	return render_template('upload.html')
 
 def allowed_extension(filename):
+	'''This function can be implemented to check if the uploaded file is a video file'''
 	if not "." in filename:
 		return False
 	ext = filename.rsplit(".",1)[1]
@@ -32,30 +33,36 @@ def allowed_extension(filename):
 	
 @app.route('/uploader', methods = ['GET', 'POST'])
 def uploaded_file():
+	'''If a video is uploaded, process the video and display output'''
 	if request.method == 'POST':
 		f = request.files['file']
 		# if not allowed_extension(f.filename):
 		# 	return
 
+		# save the file
 		f.save(secure_filename(f.filename))
 	
+		# load the soccer ball detection model
 		model_path = "app/static/"
 		model_name = "frozen_inference_graph.pb"
 		model_text = "graph_text.pbtxt"
 		net = video_tracker.loading_model(model_path + model_name, model_path + model_text)
 		
-		
+		# load pose model
 		sess = tf.Session()
 		model_cfg, model_outputs = posenet.load_model(101, sess)
 		output_stride = model_cfg['output_stride']
 
+		#OPTIONALLY can output the following, then show output as pre-loaded gif
 		#(video_bytes, bounces, body_part_bounces, body_part_sequence) = video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs)
-
 		#return Response(video_tracker.display_video(video_bytes), mimetype='multipart/x-mixed-replace; boundary=frame')
+		
+		# Show output video as it is processed in real time
 		return Response(video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs), mimetype='multipart/x-mixed-replace; boundary=frame')
 			
 
 def example_file(link):
+	'''If user clicks on an example link, process the static video file'''
 
 	if link == 1:
 		video_name = "ball_test6.mp4"
@@ -64,6 +71,7 @@ def example_file(link):
 	else:
 		video_name = "ball_test6.mp4"
 
+	#load the soccer ball detection model
 	model_path = "app/static/"
 	model_name = "frozen_inference_graph.pb"
 	model_text = "graph_text.pbtxt"
@@ -71,13 +79,15 @@ def example_file(link):
 
 	net = video_tracker.loading_model(model_path + model_name, model_path + model_text)
 	
+	#load the pose model
 	sess = tf.Session()
 	model_cfg, model_outputs = posenet.load_model(101, sess)
 	output_stride = model_cfg['output_stride']
 
+	#OPTIONALLY can output the following, then show output as pre-loaded gif
 	#(video_bytes, bounces, body_part_bounces, body_part_sequence) = video_tracker.run_video(f.filename, net, sess, output_stride, model_outputs)
-
 	#return Response(video_tracker.display_video(video_bytes), mimetype='multipart/x-mixed-replace; boundary=frame')
+	
 	return Response(video_tracker.run_video(filename, net, sess, output_stride, model_outputs), mimetype='multipart/x-mixed-replace; boundary=frame')
 	
 

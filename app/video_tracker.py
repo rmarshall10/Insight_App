@@ -16,6 +16,28 @@ def loading_model(graph, text):
 	return net
 
 
+def initialize_constants():
+	'''Initialize all constants, keys, and counters'''
+
+	body_part_key = {0:"Head", 1:"Left Thigh", 2:"Right Thigh", 3:"Left Foot", 4:"Right Foot"}
+	body_part_bounces = {"Head":0, "Left Thigh":0, "Right Thigh":0, "Left Foot":0, "Right Foot":0}
+	body_part_key_simple = {0:"Head", 1:"Thigh", 2:"Thigh", 3:"Foot", 4:"Foot", 5:"Ground"}
+	body_part_sequence = []
+	confidence = 0.0
+	(W, H) = (300, 300)
+	bounces = 0
+	frame_num = 0
+	last_juggle_frame = -4
+	first_detection = True
+	cYs = [0,0] #list of cY for each frame
+	cXs = [0,0] #list of cX for each frame
+	skipped_frames = 100
+	ground = False	
+
+
+	return (body_part_key, body_part_bounces, body_part_key_simple, body_part_sequence, confidence, W, H, bounces, frame_num, last_juggle_frame, first_detection, cYs, cXs, skipped_frames, ground)
+
+
 def read_frame(video, frame_num):
 	'''Read the next frame of the video'''
 
@@ -98,14 +120,11 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
 	# PART_NAMES = ["nose", "leftEye", "rightEye", "leftEar", "rightEar", "leftShoulder",
  	#    "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist",
  	#    "leftHip", "rightHip", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"]
-
-	# hip_distance = abs(k_coords[12, 1] - k_coords[11, 1])
-	# hip_center = min(k_coords[12, 1], k_coords[11, 1]) + hip_distance / 2.0
 	
-	#distance fro
+	#approximate length of thigh. This will be used to help determine if the touch is not part of the bady and instead is the ground or another object.
 	knee_distance = ((k_coords[11, 1] - k_coords[13, 1])**2 + (k_coords[11, 0] - k_coords[13, 0])**2)**0.5
 	
-	#choosing hips instead of knees works better for deteict thigh vs foot
+	#choosing hips instead of knees works better for detecting thigh vs foot
 	parts = [0, 11, 12, 15, 16]
 	distances = []
 
@@ -129,28 +148,15 @@ def get_closest_body_part(k_scores, k_coords, cX, cY):
 	return body_part
 
 
-
 def run_video(path, net, sess, output_stride, model_outputs):
 	'''Runs the uploaded video through the juggle counter algorithm
 	'''
 	
 	#initialize constants and counters
 	cv2.setUseOptimized(True)
-	body_part_key = {0:"Head", 1:"Left Thigh", 2:"Right Thigh", 3:"Left Foot", 4:"Right Foot"}
-	body_part_bounces = {"Head":0, "Left Thigh":0, "Right Thigh":0, "Left Foot":0, "Right Foot":0}
-	body_part_key_simple = {0:"Head", 1:"Thigh", 2:"Thigh", 3:"Foot", 4:"Foot", 5:"Ground"}
-	body_part_sequence = []
-	confidence = 0.0
-	(W, H) = (300, 300)
-	bounces = 0
-	frame_num = 0
-	last_juggle_frame = -4
-	first_detection = True
-	cYs = [0,0] #list of cY for each frame
-	cXs = [0,0] #list of cX for each frame
-	skipped_frames = 100
-	ground = False	
-
+	(body_part_key, body_part_bounces, body_part_key_simple, body_part_sequence, confidence, W, H, bounces, frame_num, last_juggle_frame, first_detection, cYs, cXs, skipped_frames, ground) = initialize_constants()
+	
+	# start the video stream
 	print("Processing video...")
 	vs = FileVideoStream(path).start()
 
@@ -158,17 +164,20 @@ def run_video(path, net, sess, output_stride, model_outputs):
 
 		(frame, frame_num) = read_frame(vs, frame_num)
 
+		#resize the frame to fit the 300x300 mobilenet size
 		try:
 			frame = cv2.resize(frame, (W, H))
 		except cv2.error as e:
 			print("...end of video")
 			break
 		
+		# pass the frame through the model and output detection
 		detection = process_frame(frame, net, W, H)
 
+		# get the centroid coordinate and size of ball detected
 		cX, cY, diameter_temp = get_centroid(frame, detection, W, H)
 		
-		# Determine the ball size from the detection on the first frame (most likely to be clear/stationary ball)
+		# Initialize ball: Determine the ball size from the detection on the first frame (most likely to be clear/stationary ball)
 		if first_detection:
 			diameter = diameter_temp
 			first_detection = False
@@ -191,11 +200,13 @@ def run_video(path, net, sess, output_stride, model_outputs):
 				
 				last_juggle_frame = frame_num
 				
-				#pose detect
-				(frame2, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
+				#pose detect (pose detect first output is a frame with the pose drawn on. If we don't want to show the pose)
+				(_, k_scores, k_coords) = get_pose(frame, sess, output_stride, model_outputs)
 				
+				# determine which body part is closes to the ball
 				body_part = get_closest_body_part(k_scores, k_coords, cXs[-2], cYs[-2])
 				
+				# add one juggle to the correct body part and overall score
 				if body_part == 5:
 					ground = True
 				else:
@@ -206,16 +217,12 @@ def run_video(path, net, sess, output_stride, model_outputs):
 		#if there is no valid detection in the frame, increase skipped_frames counter
 		else:
 			skipped_frames += 0.7
-			print('skipped_frames ', skipped_frames)
+			
 
 		#print scores on the frame
 		frame = cv2.resize(frame, (600, 600))
 		cv2.putText(frame, str(bounces), (int(2 * W * 0.76), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.01), (0, 255, 0), 2)
-		# cv2.putText(frame, "H:  " + str(body_part_bounces["Head"]), (int(W * 0.66), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
-		# cv2.putText(frame, "LT: " + str(body_part_bounces["Left Thigh"]), (int(W * 0.66), int(W * 0.4)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
-		# cv2.putText(frame, "RT: " + str(body_part_bounces["Right Thigh"]), (int(W * 0.66), int(W * 0.5)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
-		# cv2.putText(frame, "LF: " + str(body_part_bounces["Left Foot"]), (int(W * 0.66), int(W * 0.6)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
-		# cv2.putText(frame, "RF: " + str(body_part_bounces["Right Foot"]), (int(W * 0.66), int(W * 0.7)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.004), (0, 255, 0), 2)
+
 		
 		# Determining right vs left is not accurate enough, so don't differentiate between them
 		cv2.putText(frame, "Head: " + str(body_part_bounces["Head"]), (int(2 * W * 0.76), int(W * 0.5)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
@@ -228,14 +235,6 @@ def run_video(path, net, sess, output_stride, model_outputs):
 		except:
 			pass
 
-		# try:
-		# 	cv2.putText(frame, body_part_key[body_part_sequence[-2]], (int(2 * W * 0.1), int(W * 0.3)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.0035), (0, 255, 0), 2)
-		# except:
-		# 	print("None 2")
-		# try:
-		# 	cv2.putText(frame, body_part_key[body_part_sequence[-3]], (int(2 * W * 0.1), int(W * 0.4)), cv2.FONT_HERSHEY_SIMPLEX, int(W * 0.002), (0, 255, 0), 2)
-		# except:
-		# 	print("None 3")
 			
 		# Show the frame
 		ret, img = cv2.imencode(".jpg", frame)
@@ -260,6 +259,7 @@ def run_video(path, net, sess, output_stride, model_outputs):
 	#eturn (video_bytes, bounces, body_part_bounces, body_part_sequence)
 	return (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + img + b'\r\n')
+
 
 # Optional function to display the frames from a list like a video in real time
 # def display_video(video_bytes):

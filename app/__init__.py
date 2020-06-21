@@ -5,4 +5,4 @@ app = Flask(__name__)
 #app.config['UPLOAD_FOLDER'] = 'app/uploads'
 app.config['MAX_CONTENT_PATH'] = 10 * 1024 * 1024
 app.config['ALLOWED_EXTENSIONS'] = {"MP4"}
-from app import action
+from app import routes
