@@ -68,8 +68,8 @@ def example_file(link):
 		video_name = "ball_test6.mp4"
 	elif link == 2:
 		video_name = "ball_test3.mp4"
-	else:
-		video_name = "ball_test6.mp4"
+	elif link ==3:
+		video_name = "ball_test13.mp4"
 
 	#load the soccer ball detection model
 	model_path = "app/static/"
