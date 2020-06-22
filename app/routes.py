@@ -67,7 +67,7 @@ def example_file(link):
 	if link == 1:
 		video_name = "ball_test6.mp4"
 	elif link == 2:
-		video_name = "ball_test3.mp4"
+		video_name = "ball_test4.mp4"
 	elif link ==3:
 		video_name = "ball_test13.mp4"
 
