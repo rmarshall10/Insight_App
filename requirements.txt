@@ -7,4 +7,4 @@ libxrender-dev
 imutils
 time
 scipy
-werkzeug==0.16.1
+werkzeug==2.2.3
